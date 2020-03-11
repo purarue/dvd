@@ -1,8 +1,8 @@
-## XQC-DVD-HDTV
+# XQC-DVD
 
 TODO: insert gif
 
-lidl joke website that displays a DVD bouncing around on a webpage.
+A DVD Logo browser game.
 
 ## Install
 

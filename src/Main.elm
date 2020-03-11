@@ -1,31 +1,33 @@
 module Main exposing (..)
 
 import Browser as Browser exposing (element)
-import Browser.Events exposing (Visibility)
-import Collage exposing (..)
-import Collage.Layout exposing (..)
-import Collage.Render exposing (svg)
-import Collage.Text exposing (fromString)
-import Color exposing (Color)
+import Browser.Events exposing (Visibility(..))
 import Html exposing (Html, div, text)
-import Html.Attributes exposing (id)
+import Html.Attributes exposing (id, style)
 import Json.Decode as Decode
 
 
 
 -- Type Aliases ----------------------------------------------------------------
--- when the user is moused over the div,
--- the time left before it expires should pause
 
 
+{-| when the mouse is moving, ,
+the time left before it expires should pause
+-}
 type alias UIFlags =
     { display_controls : Float -- time left to display controls list
     }
 
 
 type alias Velocity =
-    { x_vel : Float
-    , y_vel : Float
+    { x : Int
+    , y : Int
+    }
+
+
+type alias Coordinate =
+    { x : Int
+    , y : Int
     }
 
 
@@ -45,6 +47,7 @@ type alias Flag =
     { windowWidth : Int
     , windowHeight : Int
     , choices : List String
+    , debug : Bool
     }
 
 
@@ -59,20 +62,19 @@ type alias BumpRateLimit =
 
 -- Event Helpers ----------------------------------------------------------------
 -- Key Events
--- the directions a user can move the the DVD logo
 
 
+{-| the directions a user can move the the DVD logo
+-}
 type KeyDirection
-    = Up
-    | Left
-    | Down
-    | Right
+    = K_Up
+    | K_Left
+    | K_Down
+    | K_Right
 
 
-
--- actions user can give using the keyboard
-
-
+{-| actions user can give using the keyboard
+-}
 type UserInputEvent
     = Movement KeyDirection
     | ShowHelp
@@ -90,16 +92,16 @@ keyHandler inputStr =
         Just ( char, "" ) ->
             case Char.toLower char of
                 'w' ->
-                    Movement Up
+                    Movement K_Up
 
                 'a' ->
-                    Movement Left
+                    Movement K_Left
 
                 's' ->
-                    Movement Down
+                    Movement K_Down
 
                 'd' ->
-                    Movement Right
+                    Movement K_Right
 
                 'h' ->
                     ShowHelp
@@ -111,17 +113,15 @@ keyHandler inputStr =
             NoKey
 
 
-
--- Visibility Change
-
-
-isPaused : Model -> Bool
-isPaused model =
-    case model.active of
-        Browser.Events.Visible ->
+{-| Return Boolean that describes whether or not animation is paused
+-}
+isPaused : Visibility -> Bool
+isPaused vis =
+    case vis of
+        Visible ->
             True
 
-        Browser.Events.Hidden ->
+        Hidden ->
             False
 
 
@@ -137,8 +137,7 @@ updateDVDSize browser =
 
 
 type alias Model =
-    { x_location : Float
-    , y_location : Float --
+    { location : Coordinate
     , ticks : Float -- ms passed since page load
     , velocity : Velocity -- x,y velocity of dvd
     , flags : UIFlags -- specifies whether the help message is being displayed
@@ -147,6 +146,8 @@ type alias Model =
     , browserSize : BrowserSize -- the current browser size (width, height)
     , choices : List String -- list of strings to select from for logo text
     , dvd : DVD -- the size of the dvd div itself
+    , score : Int -- numbers of times the dvd has hit the corner
+    , debug : Bool -- display the model as the page instead of the animation
     }
 
 
@@ -156,16 +157,21 @@ type alias Model =
 
 initModel : Flag -> Model
 initModel flags =
-    { x_location = 0.0
-    , y_location = 0.0
+    let
+        browserSize =
+            { width = flags.windowWidth, height = flags.windowHeight }
+    in
+    { location = { x = browserSize.width // 5, y = browserSize.height // 5 }
     , ticks = 0.0
-    , velocity = { x_vel = 1.0, y_vel = 1.0 }
+    , velocity = { x = 3, y = 3 }
     , flags = { display_controls = 10 }
     , userInput = NoKey
-    , active = Browser.Events.Visible
-    , browserSize = { width = flags.windowWidth, height = flags.windowHeight }
+    , active = Visible
+    , browserSize = browserSize
     , choices = flags.choices
-    , dvd = updateDVDSize { width = flags.windowWidth, height = flags.windowHeight }
+    , dvd = updateDVDSize browserSize
+    , score = 0
+    , debug = flags.debug
     }
 
 
@@ -185,47 +191,190 @@ type Msg
     | KeyUp UserInputEvent -- listen for key up events
     | VisibilityChanged Visibility -- pause animation on visibility false
     | UpdateBrowserSize Int Int -- browser size changed, update width/height
+    | IncrementScore -- called from the updateVelocity function, to signify user hit the corner
 
 
 
--- add the elapsed time (milliseconds) to the tick time
+-- methods to manage colliding with the edge of the screen
+-- get x, y location for corners of the dvd div
 
 
+type CornerType
+    = TopLeft
+    | TopRight
+    | BottomLeft
+    | BottomRight
+
+
+{-| flip horizontal velocity
+-}
+flipVelocityHorizontal : Model -> Model
+flipVelocityHorizontal model =
+    let
+        vel =
+            model.velocity
+    in
+    { model
+        | velocity = { vel | x = -vel.x }
+    }
+
+
+{-| flip vertical velocity
+-}
+flipVelocityVertical : Model -> Model
+flipVelocityVertical model =
+    let
+        vel =
+            model.velocity
+    in
+    { model
+        | velocity = { vel | y = -vel.y }
+    }
+
+
+{-| flip velocity for both directions (for corners)
+-}
+flipVelocityBoth : Model -> Model
+flipVelocityBoth model =
+    let
+        vel =
+            model.velocity
+    in
+    { model
+        | velocity =
+            { vel
+                | x = -vel.x
+                , y = -vel.y
+            }
+    }
+
+
+{-| get the X, Y of the Corner of the DVD Div
+-}
+getDVDCornerLocation : Model -> CornerType -> Coordinate
+getDVDCornerLocation model corner =
+    case corner of
+        TopLeft ->
+            { x = model.location.x
+            , y = model.location.y
+            }
+
+        TopRight ->
+            { x = model.location.x + model.dvd.width
+            , y = model.location.y
+            }
+
+        BottomLeft ->
+            { x = model.location.x
+            , y = model.location.y + model.dvd.height
+            }
+
+        BottomRight ->
+            { x = model.location.x + model.dvd.width
+            , y = model.location.y + model.dvd.height
+            }
+
+
+{-| check if the div hit a corner or edge, update
+velocity and score accordingly
+-}
+updateVelocity : Model -> Model
+updateVelocity model =
+    -- check corners and then edges
+    let
+        topLeftCoords =
+            getDVDCornerLocation model TopLeft
+
+        topRightCoords =
+            getDVDCornerLocation model TopRight
+
+        bottomLeftCoords =
+            getDVDCornerLocation model BottomLeft
+
+        bottomRightCoords =
+            getDVDCornerLocation model BottomRight
+
+        incrementScore : Model -> Model
+        incrementScore mdl =
+            let
+                ( new_model, _ ) =
+                    update IncrementScore mdl
+            in
+            new_model
+    in
+    if
+        -- flip both velocities
+        (topLeftCoords.x <= 0 && topLeftCoords.y <= 0)
+            || (topRightCoords.x >= model.browserSize.width && topRightCoords.y <= 0)
+            || (bottomLeftCoords.x <= 0 && bottomLeftCoords.y >= model.browserSize.height)
+            || (bottomRightCoords.x >= model.browserSize.width && bottomRightCoords.y >= model.browserSize.height)
+    then
+        model |> flipVelocityBoth |> incrementScore
+        -- vertical flip velocity
+
+    else if topLeftCoords.y <= 0 || bottomLeftCoords.y >= model.browserSize.height then
+        model |> flipVelocityVertical
+        -- horizontal flip velocity
+
+    else if topLeftCoords.x <= 0 || topRightCoords.x >= model.browserSize.width then
+        model |> flipVelocityHorizontal
+
+    else
+        model
+
+
+{-| add the elapsed time (milliseconds) to the tick time
+-}
 incrementTick : Model -> Float -> Model
 incrementTick model elapsed_ms =
     { model | ticks = model.ticks + elapsed_ms }
 
 
-
--- updates the location based on the velocity
-
-
+{-| updates the location based on the velocity
+-}
 updateLocation : Model -> Model
 updateLocation model =
     { model
-        | x_location = model.x_location + model.velocity.x_vel
-        , y_location = model.y_location + model.velocity.y_vel
+        | location =
+            { x = model.location.x + model.velocity.x
+            , y = model.location.y + model.velocity.y
+            }
     }
 
 
-
--- checks the location of the dvd logo based on browser size
--- changes velocity if applicable
--- updates the model and runs events on each render tick
-
-
+{-| checks the location of the dvd logo based on browser size
+changes velocity if applicable
+updates the model and runs events on each render tick
+-}
 gameLoop : Model -> Float -> ( Model, Cmd Msg )
 gameLoop model elapsed_ms =
     ( incrementTick model elapsed_ms
+        |> updateVelocity
         |> updateLocation
     , Cmd.none
     )
 
 
+{-| On window size change, update the model
+Save the browser size and reset the location/velocity
+of the DVD Div
+-}
+updateOnBrowserResize : Model -> Int -> Int -> Model
+updateOnBrowserResize model new_width new_height =
+    let
+        browserSize =
+            { width = new_width, height = new_height }
+    in
+    { model
+        | location = { x = browserSize.width // 5, y = browserSize.height // 5 }
+        , velocity = { x = 3, y = 3 }
+        , dvd = updateDVDSize browserSize
+        , browserSize = browserSize
+    }
 
--- updates the model when a message is recieved
 
-
+{-| updates the model when a message is recieved
+-}
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -243,9 +392,13 @@ update msg model =
             )
 
         UpdateBrowserSize new_width new_height ->
+            ( updateOnBrowserResize model new_width new_height
+            , Cmd.none
+            )
+
+        IncrementScore ->
             ( { model
-                | browserSize = { width = new_width, height = new_height }
-                , dvd = updateDVDSize { width = new_width, height = new_height }
+                | score = model.score + 1
               }
             , Cmd.none
             )
@@ -262,7 +415,7 @@ subscriptions model =
         , Browser.Events.onVisibilityChange VisibilityChanged -- get visibility change events
         , Browser.Events.onResize (\w h -> UpdateBrowserSize w h)
         ]
-            ++ (if isPaused model then
+            ++ (if isPaused model.active then
                     -- get a Tick event based on browser render tick rate
                     -- (requestAnimationFrame js func)
                     [ Browser.Events.onAnimationFrameDelta Tick ]
@@ -276,9 +429,32 @@ subscriptions model =
 -- View ------------------------------------------------------------------------
 
 
+pixel : Int -> String
+pixel pixelInt =
+    String.fromInt pixelInt ++ "px"
+
+
+renderDVD : Model -> Html msg
+renderDVD model =
+    div
+        [ style "width" (pixel model.dvd.width)
+        , style "height" (pixel model.dvd.height)
+        , style "left" (pixel model.location.x)
+        , style "top" (pixel model.location.y)
+        , id "dvd"
+        ]
+        [ text (String.fromInt model.score) ]
+
+
 view : Model -> Html Msg
 view model =
-    div [ id "tv-screen" ] [ text (Debug.toString model) ]
+    if model.debug then
+        div [] [ text (Debug.toString model) ]
+
+    else
+        div [ id "tv-screen" ]
+            [ renderDVD model
+            ]
 
 
 main : Program Flag Model Msg
