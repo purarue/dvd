@@ -24,3 +24,8 @@ div#dvd {
     position: absolute;
     background-color: blue;
 }
+
+div#debug {
+    top: 0;
+    left: 0;
+}

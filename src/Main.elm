@@ -433,6 +433,14 @@ pixel : Int -> String
 pixel pixelInt =
     String.fromInt pixelInt ++ "px"
 
+debugInfo : Model -> Html msg
+debugInfo model =
+    if model.debug then
+        div [ id "debug" ] [ text (Debug.toString model) ]
+    else
+        div [] []
+
+
 
 renderDVD : Model -> Html msg
 renderDVD model =
@@ -448,13 +456,11 @@ renderDVD model =
 
 view : Model -> Html Msg
 view model =
-    if model.debug then
-        div [] [ text (Debug.toString model) ]
-
-    else
-        div [ id "tv-screen" ]
-            [ renderDVD model
-            ]
+    div [ id "tv-screen" ]
+        [
+        renderDVD model
+        , debugInfo model
+        ]
 
 
 main : Program Flag Model Msg
