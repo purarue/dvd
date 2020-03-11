@@ -15,7 +15,8 @@ import Json.Decode as Decode
 the time left before it expires should pause
 -}
 type alias UIFlags =
-    { display_controls : Float -- time left to display controls list
+    { display_help : Float -- ms left to display controls list
+    , userClosedModal : Bool
     }
 
 
@@ -79,6 +80,15 @@ type UserInputEvent
     = Movement KeyDirection
     | ShowHelp
     | NoKey
+
+
+{-| Handle decoding the X,Y position of the mouse on the page
+-}
+mouseDecoder : Decode.Decoder Coordinate
+mouseDecoder =
+    Decode.map2 Coordinate
+        (Decode.field "pageX" Decode.int)
+        (Decode.field "pageY" Decode.int)
 
 
 keyDecoder : Decode.Decoder UserInputEvent
@@ -148,6 +158,7 @@ type alias Model =
     , dvd : DVD -- the size of the dvd div itself
     , score : Int -- numbers of times the dvd has hit the corner
     , debug : Bool -- display the model as the page instead of the animation
+    , mouseLocation : Coordinate
     }
 
 
@@ -164,7 +175,7 @@ initModel flags =
     { location = { x = browserSize.width // 5, y = browserSize.height // 5 }
     , ticks = 0.0
     , velocity = { x = 3, y = 3 }
-    , flags = { display_controls = 10 }
+    , flags = { display_help = 10000 , userClosedModal = False }
     , userInput = NoKey
     , active = Visible
     , browserSize = browserSize
@@ -172,6 +183,7 @@ initModel flags =
     , dvd = updateDVDSize browserSize
     , score = 0
     , debug = flags.debug
+    , mouseLocation = { x = 0, y = 0 }
     }
 
 
@@ -192,6 +204,7 @@ type Msg
     | VisibilityChanged Visibility -- pause animation on visibility false
     | UpdateBrowserSize Int Int -- browser size changed, update width/height
     | IncrementScore -- called from the updateVelocity function, to signify user hit the corner
+    | MouseMove Coordinate -- listen for when the mouse moves
 
 
 
@@ -341,6 +354,18 @@ updateLocation model =
             }
     }
 
+{-| decay time to display the help message
+-}
+decayHelpTime : Float -> Model -> Model
+decayHelpTime elapsed_ms model =
+    if model.flags.display_help > 0 then
+        let
+            m_flags = model.flags
+        in
+        { model | flags = { m_flags | display_help = m_flags.display_help - elapsed_ms } }
+    else
+        model
+
 
 {-| checks the location of the dvd logo based on browser size
 changes velocity if applicable
@@ -348,11 +373,26 @@ updates the model and runs events on each render tick
 -}
 gameLoop : Model -> Float -> ( Model, Cmd Msg )
 gameLoop model elapsed_ms =
-    ( incrementTick model elapsed_ms
+    (incrementTick model elapsed_ms
+        |> decayHelpTime elapsed_ms
         |> updateVelocity
         |> updateLocation
     , Cmd.none
     )
+
+
+{-| When the user moves the mouse,
+set the help text to display for a minimum of 5 seconds
+-}
+handleMouseMove : Model -> Model
+handleMouseMove model =
+    if model.flags.display_help >= 5000 then
+        model
+    else
+        let
+            m_flags = model.flags
+        in
+        { model | flags = { m_flags | display_help = 5000 } }
 
 
 {-| On window size change, update the model
@@ -397,9 +437,13 @@ update msg model =
             )
 
         IncrementScore ->
-            ( { model
-                | score = model.score + 1
-              }
+            ( { model | score = model.score + 1 }
+            , Cmd.none
+            )
+
+        MouseMove _ ->
+            -- ignore the coordinate, just capture the mousemove event
+            ( model |> handleMouseMove
             , Cmd.none
             )
 
@@ -414,6 +458,7 @@ subscriptions model =
         [ Browser.Events.onKeyUp (Decode.map KeyUp keyDecoder) -- get keyup events
         , Browser.Events.onVisibilityChange VisibilityChanged -- get visibility change events
         , Browser.Events.onResize (\w h -> UpdateBrowserSize w h)
+        , Browser.Events.onMouseMove (Decode.map MouseMove mouseDecoder)
         ]
             ++ (if isPaused model.active then
                     -- get a Tick event based on browser render tick rate
@@ -433,13 +478,14 @@ pixel : Int -> String
 pixel pixelInt =
     String.fromInt pixelInt ++ "px"
 
+
 debugInfo : Model -> Html msg
 debugInfo model =
     if model.debug then
         div [ id "debug" ] [ text (Debug.toString model) ]
+
     else
         div [] []
-
 
 
 renderDVD : Model -> Html msg
@@ -456,9 +502,10 @@ renderDVD model =
 
 view : Model -> Html Msg
 view model =
-    div [ id "tv-screen" ]
-        [
-        renderDVD model
+    div
+        [ id "tv-screen"
+        ]
+        [ renderDVD model
         , debugInfo model
         ]
 
