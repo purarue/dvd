@@ -10,17 +10,6 @@ import Color exposing (Color)
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (id)
 import Json.Decode as Decode
-import Task exposing (..)
-
-
-
--- Constants ------------------------------------------------------------------
--- how many seconds to display the help for on screen
-
-
-help_display_time : Float
-help_display_time =
-    7.5
 
 
 
@@ -46,6 +35,12 @@ type alias BrowserSize =
     }
 
 
+type alias DVD =
+    { width : Int
+    , height : Int
+    }
+
+
 type alias Flag =
     { windowWidth : Int
     , windowHeight : Int
@@ -53,47 +48,67 @@ type alias Flag =
     }
 
 
+type alias BumpRateLimit =
+    { up : Int
+    , left : Int
+    , down : Int
+    , right : Int
+    }
+
+
 
 -- Event Helpers ----------------------------------------------------------------
 -- Key Events
+-- the directions a user can move the the DVD logo
 
 
-type Key
-    = Character Char
+type KeyDirection
+    = Up
+    | Left
+    | Down
+    | Right
+
+
+
+-- actions user can give using the keyboard
+
+
+type UserInputEvent
+    = Movement KeyDirection
+    | ShowHelp
     | NoKey
 
 
-keyDecoder : Decode.Decoder Key
+keyDecoder : Decode.Decoder UserInputEvent
 keyDecoder =
-    Decode.map toKey (Decode.field "key" Decode.string)
+    Decode.map keyHandler (Decode.field "key" Decode.string)
 
 
-toKey : String -> Key
-toKey str =
-    case String.uncons str of
+keyHandler : String -> UserInputEvent
+keyHandler inputStr =
+    case String.uncons inputStr of
         Just ( char, "" ) ->
-            Character char
+            case Char.toLower char of
+                'w' ->
+                    Movement Up
+
+                'a' ->
+                    Movement Left
+
+                's' ->
+                    Movement Down
+
+                'd' ->
+                    Movement Right
+
+                'h' ->
+                    ShowHelp
+
+                _ ->
+                    NoKey
 
         _ ->
             NoKey
-
-
-
--- tests if the given key matches the char
-
-
-isKey : Key -> Char -> Bool
-isKey key char =
-    case key of
-        Character c ->
-            if c == char then
-                True
-
-            else
-                False
-
-        _ ->
-            False
 
 
 
@@ -110,20 +125,28 @@ isPaused model =
             False
 
 
+updateDVDSize : BrowserSize -> DVD
+updateDVDSize browser =
+    { width = browser.width // 5
+    , height = browser.width // 10
+    }
+
+
 
 -- Model -----------------------------------------------------------------------
 
 
 type alias Model =
     { x_location : Float
-    , y_location : Float
-    , ticks : Float
-    , velocity : Velocity
-    , flags : UIFlags
-    , userInput : Key
-    , active : Visibility
-    , browserSize : BrowserSize
-    , choices: List String
+    , y_location : Float --
+    , ticks : Float -- ms passed since page load
+    , velocity : Velocity -- x,y velocity of dvd
+    , flags : UIFlags -- specifies whether the help message is being displayed
+    , userInput : UserInputEvent -- user input event to consume
+    , active : Visibility -- whether page is focused or not, pause game
+    , browserSize : BrowserSize -- the current browser size (width, height)
+    , choices : List String -- list of strings to select from for logo text
+    , dvd : DVD -- the size of the dvd div itself
     }
 
 
@@ -137,11 +160,12 @@ initModel flags =
     , y_location = 0.0
     , ticks = 0.0
     , velocity = { x_vel = 1.0, y_vel = 1.0 }
-    , flags = { display_controls = help_display_time }
+    , flags = { display_controls = 10 }
     , userInput = NoKey
     , active = Browser.Events.Visible
     , browserSize = { width = flags.windowWidth, height = flags.windowHeight }
     , choices = flags.choices
+    , dvd = updateDVDSize { width = flags.windowWidth, height = flags.windowHeight }
     }
 
 
@@ -158,22 +182,56 @@ init flags =
 
 type Msg
     = Tick Float -- game tick
-    | KeyUp Key -- listen for key up events
+    | KeyUp UserInputEvent -- listen for key up events
     | VisibilityChanged Visibility -- pause animation on visibility false
     | UpdateBrowserSize Int Int -- browser size changed, update width/height
 
 
+
+-- add the elapsed time (milliseconds) to the tick time
+
+
+incrementTick : Model -> Float -> Model
+incrementTick model elapsed_ms =
+    { model | ticks = model.ticks + elapsed_ms }
+
+
+
+-- updates the location based on the velocity
+
+
+updateLocation : Model -> Model
+updateLocation model =
+    { model
+        | x_location = model.x_location + model.velocity.x_vel
+        , y_location = model.y_location + model.velocity.y_vel
+    }
+
+
+
+-- checks the location of the dvd logo based on browser size
+-- changes velocity if applicable
+-- updates the model and runs events on each render tick
+
+
+gameLoop : Model -> Float -> ( Model, Cmd Msg )
+gameLoop model elapsed_ms =
+    ( incrementTick model elapsed_ms
+        |> updateLocation
+    , Cmd.none
+    )
+
+
+
+-- updates the model when a message is recieved
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Tick elapsed_ms ->
-            ( { model | ticks = model.ticks + elapsed_ms }
-            , Cmd.none
-            )
+            gameLoop model elapsed_ms
 
-            -- for possible future improvements, does not do anything right now
         KeyUp key ->
             ( { model | userInput = key }
             , Cmd.none
@@ -185,7 +243,10 @@ update msg model =
             )
 
         UpdateBrowserSize new_width new_height ->
-            ( { model | browserSize = { width = new_width, height = new_height } }
+            ( { model
+                | browserSize = { width = new_width, height = new_height }
+                , dvd = updateDVDSize { width = new_width, height = new_height }
+              }
             , Cmd.none
             )
 
