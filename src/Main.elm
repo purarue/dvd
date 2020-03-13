@@ -7,6 +7,10 @@ import Html.Attributes exposing (id, style)
 import Json.Decode as Decode
 
 
+default_velocity =
+    3
+
+
 
 -- Type Aliases ----------------------------------------------------------------
 
@@ -49,14 +53,6 @@ type alias Flag =
     , windowHeight : Int
     , choices : List String
     , debug : Bool
-    }
-
-
-type alias BumpRateLimit =
-    { up : Int
-    , left : Int
-    , down : Int
-    , right : Int
     }
 
 
@@ -147,7 +143,7 @@ updateDVDSize browser =
 
 
 type alias Model =
-    { location : Coordinate
+    { location : Coordinate -- x, y location of the dvd div
     , ticks : Float -- ms passed since page load
     , velocity : Velocity -- x,y velocity of dvd
     , flags : UIFlags -- specifies whether the help message is being displayed
@@ -174,8 +170,8 @@ initModel flags =
     in
     { location = { x = browserSize.width // 5, y = browserSize.height // 5 }
     , ticks = 0.0
-    , velocity = { x = 3, y = 3 }
-    , flags = { display_help = 10000 , userClosedModal = False }
+    , velocity = { x = default_velocity, y = default_velocity }
+    , flags = { display_help = 10000, userClosedModal = False }
     , userInput = NoKey
     , active = Visible
     , browserSize = browserSize
@@ -219,51 +215,6 @@ type CornerType
     | BottomRight
 
 
-{-| flip horizontal velocity
--}
-flipVelocityHorizontal : Model -> Model
-flipVelocityHorizontal model =
-    let
-        vel =
-            model.velocity
-    in
-    { model
-        | velocity = { vel | x = -vel.x }
-    }
-
-
-{-| flip vertical velocity
--}
-flipVelocityVertical : Model -> Model
-flipVelocityVertical model =
-    let
-        vel =
-            model.velocity
-    in
-    { model
-        | velocity = { vel | y = -vel.y }
-    }
-
-
-{-| flip velocity for both directions (for corners)
--}
-flipVelocityBoth : Model -> Model
-flipVelocityBoth model =
-    let
-        vel =
-            model.velocity
-    in
-    { model
-        | velocity =
-            { vel
-                | x = -vel.x
-                , y = -vel.y
-            }
-    }
-
-
-{-| get the X, Y of the Corner of the DVD Div
--}
 getDVDCornerLocation : Model -> CornerType -> Coordinate
 getDVDCornerLocation model corner =
     case corner of
@@ -314,6 +265,43 @@ updateVelocity model =
                     update IncrementScore mdl
             in
             new_model
+
+        -- flip horizontal velocity
+        flipVelocityHorizontal : Model -> Model
+        flipVelocityHorizontal fh_model =
+            let
+                vel =
+                    fh_model.velocity
+            in
+            { fh_model
+                | velocity = { vel | x = -vel.x }
+            }
+
+        -- flip vertical velocity
+        flipVelocityVertical : Model -> Model
+        flipVelocityVertical fv_model =
+            let
+                vel =
+                    model.velocity
+            in
+            { fv_model
+                | velocity = { vel | y = -vel.y }
+            }
+
+        -- flip velocity for both directions (for corners)
+        flipVelocityBoth : Model -> Model
+        flipVelocityBoth fb_model =
+            let
+                vel =
+                    fb_model.velocity
+            in
+            { fb_model
+                | velocity =
+                    { vel
+                        | x = -vel.x
+                        , y = -vel.y
+                    }
+            }
     in
     if
         -- flip both velocities
@@ -354,15 +342,18 @@ updateLocation model =
             }
     }
 
+
 {-| decay time to display the help message
 -}
 decayHelpTime : Float -> Model -> Model
 decayHelpTime elapsed_ms model =
     if model.flags.display_help > 0 then
         let
-            m_flags = model.flags
+            m_flags =
+                model.flags
         in
         { model | flags = { m_flags | display_help = m_flags.display_help - elapsed_ms } }
+
     else
         model
 
@@ -373,7 +364,7 @@ updates the model and runs events on each render tick
 -}
 gameLoop : Model -> Float -> ( Model, Cmd Msg )
 gameLoop model elapsed_ms =
-    (incrementTick model elapsed_ms
+    ( incrementTick model elapsed_ms
         |> decayHelpTime elapsed_ms
         |> updateVelocity
         |> updateLocation
@@ -381,42 +372,43 @@ gameLoop model elapsed_ms =
     )
 
 
-{-| When the user moves the mouse,
-set the help text to display for a minimum of 5 seconds
--}
-handleMouseMove : Model -> Model
-handleMouseMove model =
-    if model.flags.display_help >= 5000 then
-        model
-    else
-        let
-            m_flags = model.flags
-        in
-        { model | flags = { m_flags | display_help = 5000 } }
-
-
-{-| On window size change, update the model
-Save the browser size and reset the location/velocity
-of the DVD Div
--}
-updateOnBrowserResize : Model -> Int -> Int -> Model
-updateOnBrowserResize model new_width new_height =
-    let
-        browserSize =
-            { width = new_width, height = new_height }
-    in
-    { model
-        | location = { x = browserSize.width // 5, y = browserSize.height // 5 }
-        , velocity = { x = 3, y = 3 }
-        , dvd = updateDVDSize browserSize
-        , browserSize = browserSize
-    }
-
-
 {-| updates the model when a message is recieved
 -}
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        -- handle IncrementScore
+        increaseScoreHandler : Model -> Model
+        increaseScoreHandler s_model =
+            { s_model | score = s_model.score + 1 }
+
+        -- handle UpdateBrowserSize
+        updateOnBrowserResize : Model -> Int -> Int -> Model
+        updateOnBrowserResize u_model new_width new_height =
+            let
+                browserSize =
+                    { width = new_width, height = new_height }
+            in
+            { u_model
+                | location = { x = browserSize.width // 5, y = browserSize.height // 5 }
+                , velocity = { x = default_velocity, y = default_velocity }
+                , dvd = updateDVDSize browserSize
+                , browserSize = browserSize
+            }
+
+        -- When the user moves the mouse, set the help text to display for a minimum of 5 seconds
+        handleMouseMove : Model -> Model
+        handleMouseMove h_model =
+            if h_model.flags.display_help >= 5000 then
+                h_model
+
+            else
+                let
+                    m_flags =
+                        h_model.flags
+                in
+                { h_model | flags = { m_flags | display_help = 5000 } }
+    in
     case msg of
         Tick elapsed_ms ->
             gameLoop model elapsed_ms
@@ -437,7 +429,7 @@ update msg model =
             )
 
         IncrementScore ->
-            ( { model | score = model.score + 1 }
+            ( increaseScoreHandler model
             , Cmd.none
             )
 
