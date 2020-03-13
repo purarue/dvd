@@ -2,15 +2,43 @@ module Main exposing (..)
 
 import Browser as Browser exposing (element)
 import Browser.Events exposing (Visibility(..))
-import Html exposing (Html, div, text)
+import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (id, style)
 import Html.Events exposing (onClick)
 import Json.Decode as Decode
 import List exposing (map)
 
 
+
+-- Constants -------------------------------------------------------------------
+
+
+{-| default amount of pixels to move each animation frame
+-}
+default_velocity : Int
 default_velocity =
     3
+
+
+{-| default time to display help modeal for
+-}
+default_display_time : Float
+default_display_time =
+    5000.0
+
+
+{-| rate limit duration
+-}
+default_rate_limit : Float
+default_rate_limit =
+    3000.0
+
+
+{-| distance to bump the logo
+-}
+default_bump : Int
+default_bump =
+    5
 
 
 
@@ -72,10 +100,16 @@ type KeyDirection
     | K_Right
 
 
+type VelocityChange
+    = SpeedUp
+    | SlowDown
+
+
 {-| actions user can give using the keyboard
 -}
 type UserInputEvent
     = Movement KeyDirection
+    | Speed VelocityChange
     | NoKey
 
 
@@ -109,6 +143,12 @@ keyHandler inputStr =
 
                 'd' ->
                     Movement K_Right
+
+                'q' ->
+                    Speed SlowDown
+
+                'e' ->
+                    Speed SpeedUp
 
                 _ ->
                     NoKey
@@ -145,7 +185,6 @@ type alias Model =
     , ticks : Float -- ms passed since page load
     , velocity : Velocity -- x,y velocity of dvd
     , flags : UIFlags -- specifies whether the help message is being displayed
-    , userInput : UserInputEvent -- user input event to consume
     , active : Visibility -- whether page is focused or not, pause game
     , browserSize : BrowserSize -- the current browser size (width, height)
     , choices : List String -- list of strings to select from for logo text
@@ -153,6 +192,7 @@ type alias Model =
     , score : Int -- numbers of times the dvd has hit the corner
     , debug : Bool -- display the model as the page instead of the animation
     , mouseLocation : Coordinate
+    , rateLimit : Float -- the 3s wait limit for bumping the logo
     }
 
 
@@ -169,8 +209,7 @@ initModel flags =
     { location = { x = browserSize.width // 5, y = browserSize.height // 5 }
     , ticks = 0.0
     , velocity = { x = default_velocity, y = default_velocity }
-    , flags = { display_help = 10000, userClosedModal = False }
-    , userInput = NoKey
+    , flags = { display_help = default_display_time, userClosedModal = False }
     , active = Visible
     , browserSize = browserSize
     , choices = flags.choices
@@ -178,6 +217,7 @@ initModel flags =
     , score = 0
     , debug = flags.debug
     , mouseLocation = { x = 0, y = 0 }
+    , rateLimit = 0.0
     }
 
 
@@ -301,57 +341,50 @@ updateVelocity model =
                         , y = -vel.y
                     }
             }
+
+        -- incase the div clips out of bounds
+        -- due to user input, reset it
+        resetOutOfBounds : Model -> Model
+        resetOutOfBounds r_model =
+            let
+                l =
+                    r_model.location
+            in
+            -- top of screen
+            if topLeftCoords.y < 0 then
+                { r_model | location = { l | y = l.y - topLeftCoords.y } }
+                -- left of screen
+
+            else if topLeftCoords.x < 0 then
+                { r_model | location = { l | x = l.x - topLeftCoords.x } }
+                -- right of screen
+
+            else if bottomRightCoords.x > model.browserSize.width then
+                { r_model | location = { l | x = model.browserSize.width - model.dvd.width } }
+                -- bottom of screen
+
+            else if bottomRightCoords.y > model.browserSize.height then
+                { r_model | location = { l | y = model.browserSize.height - model.dvd.height } }
+
+            else
+                r_model
     in
     if
-        -- flip both velocities
+        -- flip both velocities ( hit the corner )
         (topLeftCoords.x <= 0 && topLeftCoords.y <= 0)
             || (topRightCoords.x >= model.browserSize.width && topRightCoords.y <= 0)
             || (bottomLeftCoords.x <= 0 && bottomLeftCoords.y >= model.browserSize.height)
             || (bottomRightCoords.x >= model.browserSize.width && bottomRightCoords.y >= model.browserSize.height)
     then
-        model |> flipVelocityBoth |> incrementScore
+        model |> flipVelocityBoth |> resetOutOfBounds |> incrementScore
         -- vertical flip velocity
 
     else if topLeftCoords.y <= 0 || bottomLeftCoords.y >= model.browserSize.height then
-        model |> flipVelocityVertical
+        model |> flipVelocityVertical |> resetOutOfBounds
         -- horizontal flip velocity
 
     else if topLeftCoords.x <= 0 || topRightCoords.x >= model.browserSize.width then
-        model |> flipVelocityHorizontal
-
-    else
-        model
-
-
-{-| add the elapsed time (milliseconds) to the tick time
--}
-incrementTick : Model -> Float -> Model
-incrementTick model elapsed_ms =
-    { model | ticks = model.ticks + elapsed_ms }
-
-
-{-| updates the location based on the velocity
--}
-updateLocation : Model -> Model
-updateLocation model =
-    { model
-        | location =
-            { x = model.location.x + model.velocity.x
-            , y = model.location.y + model.velocity.y
-            }
-    }
-
-
-{-| decay time to display the help message
--}
-decayHelpTime : Float -> Model -> Model
-decayHelpTime elapsed_ms model =
-    if model.flags.display_help > 0 then
-        let
-            m_flags =
-                model.flags
-        in
-        { model | flags = { m_flags | display_help = m_flags.display_help - elapsed_ms } }
+        model |> flipVelocityHorizontal |> resetOutOfBounds
 
     else
         model
@@ -363,12 +396,152 @@ updates the model and runs events on each render tick
 -}
 gameLoop : Model -> Float -> ( Model, Cmd Msg )
 gameLoop model elapsed_ms =
+    let
+        -- add the elapsed time (milliseconds) to the tick time
+        incrementTick : Model -> Float -> Model
+        incrementTick t_model new_ticks =
+            { t_model | ticks = t_model.ticks + new_ticks }
+
+        -- decay time to display the help message
+        decayHelpTime : Float -> Model -> Model
+        decayHelpTime decay_ms d_model =
+            if d_model.flags.display_help > 0 then
+                let
+                    m_flags =
+                        d_model.flags
+                in
+                { d_model | flags = { m_flags | display_help = m_flags.display_help - decay_ms } }
+
+            else
+                d_model
+
+        -- decay time for bumping logo
+        decayRateLimit : Float -> Model -> Model
+        decayRateLimit decay_ms d_model =
+            if d_model.rateLimit > 0 then
+                { d_model | rateLimit = d_model.rateLimit - decay_ms }
+
+            else
+                d_model
+
+        -- updates the location based on the velocity
+        updateLocation : Model -> Model
+        updateLocation u_model =
+            { u_model
+                | location =
+                    { x = u_model.location.x + u_model.velocity.x
+                    , y = u_model.location.y + u_model.velocity.y
+                    }
+            }
+    in
     ( incrementTick model elapsed_ms
         |> decayHelpTime elapsed_ms
+        |> decayRateLimit elapsed_ms
         |> updateVelocity
         |> updateLocation
     , Cmd.none
     )
+
+
+{-| Handle's the User Input for modifying location/speed
+for the logo
+
+Moving the logo resets the rate limit to prevent spamming
+the movement commands
+
+-}
+consumeUserInputEvent : Model -> UserInputEvent -> Model
+consumeUserInputEvent model ui_event =
+    case ui_event of
+        Movement dir ->
+            let
+                l =
+                    model.location
+
+                -- sets the rate limit to the default
+                -- only called when the div was moved
+                setRateLimit : Model -> Model
+                setRateLimit s_model =
+                    { s_model | rateLimit = default_rate_limit }
+
+                -- executes the passed function if the model
+                -- passed the rate limit
+                ifRateRun : Model -> (Model -> Model) -> Model
+                ifRateRun p_model modify_model =
+                    if p_model.rateLimit <= 0 then
+                        modify_model p_model |> setRateLimit
+
+                    else
+                        model
+            in
+            case dir of
+                K_Up ->
+                    ifRateRun model (\m -> { m | location = { l | y = l.y - default_bump } })
+
+                K_Left ->
+                    ifRateRun model (\m -> { m | location = { l | x = l.x - default_bump } })
+
+                K_Right ->
+                    ifRateRun model (\m -> { m | location = { l | x = l.x + default_bump } })
+
+                K_Down ->
+                    ifRateRun model (\m -> { m | location = { l | y = l.y + default_bump } })
+
+        Speed change ->
+            let
+                -- makes sure that velocity is within some sane range; 2 - ( 15 * default_bump )
+                verifyVelocity : Model -> Int -> Bool
+                verifyVelocity v_model proposed_change =
+                    let
+                        magnitude =
+                            abs v_model.velocity.x + proposed_change
+                    in
+                    magnitude >= 2 && magnitude <= 15 * default_velocity
+
+                -- increases/decreases the velocity
+                modifyVelocity : Int -> Model -> Model
+                modifyVelocity change_vel v_model =
+                    let
+                        vel =
+                            v_model.velocity
+
+                        -- incrase/decrease positive/negative velocities
+                        apply_speed : Int -> Int -> Int
+                        apply_speed old_vel inc_dec =
+                            let
+                                new_magnitude =
+                                    abs old_vel + inc_dec
+                            in
+                            if old_vel > 0 then
+                                new_magnitude
+
+                            else
+                                -new_magnitude
+                    in
+                    { v_model
+                        | velocity =
+                            { x = apply_speed vel.x change_vel
+                            , y = apply_speed vel.y change_vel
+                            }
+                    }
+            in
+            case change of
+                SpeedUp ->
+                    if verifyVelocity model 1 then
+                        modifyVelocity 1 model
+
+                    else
+                        model
+
+                SlowDown ->
+                    if verifyVelocity model -1 then
+                        modifyVelocity -1 model
+
+                    else
+                        model
+
+        NoKey ->
+            model
 
 
 {-| updates the model when a message is recieved
@@ -376,11 +549,6 @@ gameLoop model elapsed_ms =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
-        -- handle IncrementScore
-        increaseScoreHandler : Model -> Model
-        increaseScoreHandler s_model =
-            { s_model | score = s_model.score + 1 }
-
         -- handle UpdateBrowserSize
         updateOnBrowserResize : Model -> Int -> Int -> Model
         updateOnBrowserResize u_model new_width new_height =
@@ -389,31 +557,16 @@ update msg model =
                     { width = new_width, height = new_height }
             in
             { u_model
-                | location = { x = browserSize.width // 5, y = browserSize.height // 5 }
-                , velocity = { x = default_velocity, y = default_velocity }
-                , dvd = updateDVDSize browserSize
+                | dvd = updateDVDSize browserSize
                 , browserSize = browserSize
             }
-
-        -- When the user moves the mouse, set the help text to display for a minimum of 5 seconds
-        handleMouseMove : Model -> Model
-        handleMouseMove h_model =
-            if h_model.flags.display_help >= 5000 then
-                h_model
-
-            else
-                let
-                    m_flags =
-                        h_model.flags
-                in
-                { h_model | flags = { m_flags | display_help = 5000 } }
     in
     case msg of
         Tick elapsed_ms ->
             gameLoop model elapsed_ms
 
         KeyUp key ->
-            ( { model | userInput = key }
+            ( consumeUserInputEvent model key
             , Cmd.none
             )
 
@@ -428,12 +581,22 @@ update msg model =
             )
 
         IncrementScore ->
-            ( increaseScoreHandler model
+            ( { model | score = model.score + 1 }
             , Cmd.none
             )
 
+        -- ignore the coordinate, just capture the mousemove event
         MouseMove _ ->
-            -- ignore the coordinate, just capture the mousemove event
+            -- whenever the mouse moves, reset the display time for the modal
+            let
+                handleMouseMove : Model -> Model
+                handleMouseMove h_model =
+                    let
+                        m_flags =
+                            h_model.flags
+                    in
+                    { h_model | flags = { m_flags | display_help = default_display_time } }
+            in
             ( model |> handleMouseMove
             , Cmd.none
             )
@@ -492,17 +655,18 @@ renderHelp model =
             [ id "help" ]
             ([ div
                 [ id "close-button"
-                , onClick UserClosedHelp ]
+                , onClick UserClosedHelp
+                ]
                 [ text "×" ]
              ]
-                ++ div_list [ "one", "two", "three" ]
+                ++ div_list [ "• WASD to bump", "logo every 3/sec", "• Q/E to adjust speed" ]
             )
 
     else
         div [] []
 
 
-debugInfo : Model -> Html Msg
+debugInfo : Model -> Html msg
 debugInfo model =
     if model.debug then
         div [ id "debug" ] [ text (Debug.toString model) ]
@@ -520,7 +684,10 @@ renderDVD model =
         , style "top" (pixel model.location.y)
         , id "dvd"
         ]
-        [ text (String.fromInt model.score) ]
+        [ span
+            []
+            [ text (String.fromInt model.score) ]
+        ]
 
 
 view : Model -> Html Msg

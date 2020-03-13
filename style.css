@@ -23,6 +23,11 @@ div#tv-screen {
 div#dvd {
     position: absolute;
     background-color: blue;
+    text-align: center;
+    vertical-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 div#debug {
@@ -35,23 +40,32 @@ div#help {
     display: flex;
     flex-direction: column;
     flex-wrap: nowrap;
-    /*justify-content: center; */
     position: absolute;
-    font-size: 1rem;
+    font-size: 0.66rem;
+    align-items: start;
     top: 0;
     right: 0;
     margin: 10px;
     padding: 5px;
-    background-radius: 2px;
+    padding-top: 0px;
+    border-radius: 2px;
     background-color: #222;
 }
 
+div#help hr {
+    width: 100%;
+}
+
 div#help div#close-button {
+    position: relative;
+    top: 3px;
+    font-size: 1.25rem;
     font-family: Garamond, "Apple Garamond";
     align-self: end;
     cursor: pointer;
 }
 
 div#help div#close-button:hover {
+    color: darkgrey;
     opacity: 50%;
 }
