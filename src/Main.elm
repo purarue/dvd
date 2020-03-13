@@ -4,7 +4,9 @@ import Browser as Browser exposing (element)
 import Browser.Events exposing (Visibility(..))
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (id, style)
+import Html.Events exposing (onClick)
 import Json.Decode as Decode
+import List exposing (map)
 
 
 default_velocity =
@@ -74,7 +76,6 @@ type KeyDirection
 -}
 type UserInputEvent
     = Movement KeyDirection
-    | ShowHelp
     | NoKey
 
 
@@ -108,9 +109,6 @@ keyHandler inputStr =
 
                 'd' ->
                     Movement K_Right
-
-                'h' ->
-                    ShowHelp
 
                 _ ->
                     NoKey
@@ -201,6 +199,7 @@ type Msg
     | UpdateBrowserSize Int Int -- browser size changed, update width/height
     | IncrementScore -- called from the updateVelocity function, to signify user hit the corner
     | MouseMove Coordinate -- listen for when the mouse moves
+    | UserClosedHelp -- dont show help on mouse move if user clicks 'x'
 
 
 
@@ -439,6 +438,15 @@ update msg model =
             , Cmd.none
             )
 
+        UserClosedHelp ->
+            let
+                ui_flags =
+                    model.flags
+            in
+            ( { model | flags = { ui_flags | userClosedModal = True } }
+            , Cmd.none
+            )
+
 
 
 -- Subscriptions ---------------------------------------------------------------
@@ -471,7 +479,30 @@ pixel pixelInt =
     String.fromInt pixelInt ++ "px"
 
 
-debugInfo : Model -> Html msg
+renderHelp : Model -> Html Msg
+renderHelp model =
+    let
+        -- create a list of basic divs from a list of strings
+        div_list : List String -> List (Html Msg)
+        div_list div_contents =
+            map (\ds -> div [] [ text ds ]) div_contents
+    in
+    if not model.flags.userClosedModal && model.flags.display_help > 0 then
+        div
+            [ id "help" ]
+            ([ div
+                [ id "close-button"
+                , onClick UserClosedHelp ]
+                [ text "×" ]
+             ]
+                ++ div_list [ "one", "two", "three" ]
+            )
+
+    else
+        div [] []
+
+
+debugInfo : Model -> Html Msg
 debugInfo model =
     if model.debug then
         div [ id "debug" ] [ text (Debug.toString model) ]
@@ -480,7 +511,7 @@ debugInfo model =
         div [] []
 
 
-renderDVD : Model -> Html msg
+renderDVD : Model -> Html Msg
 renderDVD model =
     div
         [ style "width" (pixel model.dvd.width)
@@ -497,7 +528,8 @@ view model =
     div
         [ id "tv-screen"
         ]
-        [ renderDVD model
+        [ renderHelp model
+        , renderDVD model
         , debugInfo model
         ]
 

@@ -26,6 +26,32 @@ div#dvd {
 }
 
 div#debug {
-    top: 0;
+    position: absolute;
+    bottom: 0;
     left: 0;
+}
+
+div#help {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    /*justify-content: center; */
+    position: absolute;
+    font-size: 1rem;
+    top: 0;
+    right: 0;
+    margin: 10px;
+    padding: 5px;
+    background-radius: 2px;
+    background-color: #222;
+}
+
+div#help div#close-button {
+    font-family: Garamond, "Apple Garamond";
+    align-self: end;
+    cursor: pointer;
+}
+
+div#help div#close-button:hover {
+    opacity: 50%;
 }
