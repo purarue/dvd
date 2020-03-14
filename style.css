@@ -1,4 +1,10 @@
 
+/* load font */
+@font-face {
+    font-family: "DVDFont";
+    src: url("assets/Montserrat-BoldItalic.ttf");
+}
+
 /* zero out margin/padding */
 * {
     margin: 0;
@@ -28,6 +34,8 @@ div#dvd {
     display: flex;
     justify-content: center;
     align-items: center;
+    font-family: "DVDFont", sans-serif;
+    font-weight: 900;
 }
 
 div#debug {

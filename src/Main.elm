@@ -6,7 +6,8 @@ import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (id, style)
 import Html.Events exposing (onClick)
 import Json.Decode as Decode
-import List exposing (map)
+import List exposing (head, map)
+import Maybe exposing (withDefault)
 
 
 
@@ -188,6 +189,7 @@ type alias Model =
     , active : Visibility -- whether page is focused or not, pause game
     , browserSize : BrowserSize -- the current browser size (width, height)
     , choices : List String -- list of strings to select from for logo text
+    , chosen : String -- current text to display
     , dvd : DVD -- the size of the dvd div itself
     , score : Int -- numbers of times the dvd has hit the corner
     , debug : Bool -- display the model as the page instead of the animation
@@ -213,6 +215,7 @@ initModel flags =
     , active = Visible
     , browserSize = browserSize
     , choices = flags.choices
+    , chosen = head flags.choices |> withDefault "DVD"
     , dvd = updateDVDSize browserSize
     , score = 0
     , debug = flags.debug
@@ -489,14 +492,14 @@ consumeUserInputEvent model ui_event =
 
         Speed change ->
             let
-                -- makes sure that velocity is within some sane range; 2 - ( 15 * default_bump )
+                -- makes sure that velocity is within some sane range; 2 - ( 2 * default_velocity )
                 verifyVelocity : Model -> Int -> Bool
                 verifyVelocity v_model proposed_change =
                     let
                         magnitude =
                             abs v_model.velocity.x + proposed_change
                     in
-                    magnitude >= 2 && magnitude <= 15 * default_velocity
+                    magnitude >= 2 && magnitude <= 2 * default_velocity
 
                 -- increases/decreases the velocity
                 modifyVelocity : Int -> Model -> Model
@@ -637,19 +640,8 @@ subscriptions model =
 -- View ------------------------------------------------------------------------
 
 
-pixel : Int -> String
-pixel pixelInt =
-    String.fromInt pixelInt ++ "px"
-
-
 renderHelp : Model -> Html Msg
 renderHelp model =
-    let
-        -- create a list of basic divs from a list of strings
-        div_list : List String -> List (Html Msg)
-        div_list div_contents =
-            map (\ds -> div [] [ text ds ]) div_contents
-    in
     if not model.flags.userClosedModal && model.flags.display_help > 0 then
         div
             [ id "help" ]
@@ -659,11 +651,31 @@ renderHelp model =
                 ]
                 [ text "×" ]
              ]
-                ++ div_list [ "• WASD to bump", "logo every 3/sec", "• Q/E to adjust speed" ]
+                ++ map (\ds -> div [] [ text ds ]) [ "• WASD to bump", "logo every 3/sec", "• Q/E to adjust speed" ]
             )
 
     else
         div [] []
+
+
+renderDVD : Model -> Html Msg
+renderDVD model =
+    let
+        pixel : Int -> String
+        pixel pixelInt =
+            String.fromInt pixelInt ++ "px"
+    in
+    div
+        [ style "width" (pixel model.dvd.width)
+        , style "height" (pixel model.dvd.height)
+        , style "left" (pixel model.location.x)
+        , style "top" (pixel model.location.y)
+        , id "dvd"
+        ]
+        [ span
+            []
+            [ text model.chosen ]
+        ]
 
 
 debugInfo : Model -> Html msg
@@ -675,26 +687,10 @@ debugInfo model =
         div [] []
 
 
-renderDVD : Model -> Html Msg
-renderDVD model =
-    div
-        [ style "width" (pixel model.dvd.width)
-        , style "height" (pixel model.dvd.height)
-        , style "left" (pixel model.location.x)
-        , style "top" (pixel model.location.y)
-        , id "dvd"
-        ]
-        [ span
-            []
-            [ text (String.fromInt model.score) ]
-        ]
-
-
 view : Model -> Html Msg
 view model =
     div
-        [ id "tv-screen"
-        ]
+        [ id "tv-screen" ]
         [ renderHelp model
         , renderDVD model
         , debugInfo model
