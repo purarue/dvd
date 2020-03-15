@@ -2,7 +2,11 @@
 
 TODO: insert gif
 
-A DVD Logo browser game.
+A browser dvd logo animation/game.
+
+WASD bumps the logo
+
+QE increases/decreases the speed
 
 ## Install
 
@@ -11,3 +15,5 @@ A DVD Logo browser game.
 * open `index.html` in your browser
 
 Generates a static site with this git directory as the root.
+
+Adding `?debug` to the end of the URL lets you see the current model.

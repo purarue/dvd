@@ -174,7 +174,7 @@ isPaused vis =
 
 updateDVDSize : BrowserSize -> DVD
 updateDVDSize browser =
-    { width = browser.width // 5
+    { width = browser.width // 6
     , height = browser.width // 10
     }
 
