@@ -1,12 +1,14 @@
 module Main exposing (..)
 
+import Array exposing (Array, fromList, get, length)
 import Browser as Browser exposing (element)
 import Browser.Events exposing (Visibility(..))
 import Html exposing (Html, div, span, text)
+import Html.Lazy exposing (lazy)
 import Html.Attributes exposing (id, style)
 import Html.Events exposing (onClick)
 import Json.Decode as Decode
-import List exposing (head, map)
+import List exposing (map)
 import Maybe exposing (withDefault)
 
 
@@ -188,8 +190,8 @@ type alias Model =
     , flags : UIFlags -- specifies whether the help message is being displayed
     , active : Visibility -- whether page is focused or not, pause game
     , browserSize : BrowserSize -- the current browser size (width, height)
-    , choices : List String -- list of strings to select from for logo text
-    , chosen : String -- current text to display
+    , choices : Array String -- Array of strings to select from for logo text
+    , chosen : Int -- current index of text to display
     , dvd : DVD -- the size of the dvd div itself
     , score : Int -- numbers of times the dvd has hit the corner
     , debug : Bool -- display the model as the page instead of the animation
@@ -214,8 +216,8 @@ initModel flags =
     , flags = { display_help = default_display_time, userClosedModal = False }
     , active = Visible
     , browserSize = browserSize
-    , choices = flags.choices
-    , chosen = head flags.choices |> withDefault "DVD"
+    , choices = fromList flags.choices
+    , chosen = 0
     , dvd = updateDVDSize browserSize
     , score = 0
     , debug = flags.debug
@@ -308,6 +310,15 @@ updateVelocity model =
             in
             new_model
 
+        -- change dvd text
+        nextDVDText : Model -> Model
+        nextDVDText d_model =
+            if d_model.chosen + 1 == length d_model.choices then
+                { d_model | chosen = 0 }
+
+            else
+                { d_model | chosen = d_model.chosen + 1 }
+
         -- flip horizontal velocity
         flipVelocityHorizontal : Model -> Model
         flipVelocityHorizontal fh_model =
@@ -379,15 +390,15 @@ updateVelocity model =
             || (bottomLeftCoords.x <= 0 && bottomLeftCoords.y >= model.browserSize.height)
             || (bottomRightCoords.x >= model.browserSize.width && bottomRightCoords.y >= model.browserSize.height)
     then
-        model |> flipVelocityBoth |> resetOutOfBounds |> incrementScore
+        model |> flipVelocityBoth |> resetOutOfBounds |> nextDVDText |> incrementScore
         -- vertical flip velocity
 
     else if topLeftCoords.y <= 0 || bottomLeftCoords.y >= model.browserSize.height then
-        model |> flipVelocityVertical |> resetOutOfBounds
+        model |> flipVelocityVertical |> resetOutOfBounds |> nextDVDText
         -- horizontal flip velocity
 
     else if topLeftCoords.x <= 0 || topRightCoords.x >= model.browserSize.width then
-        model |> flipVelocityHorizontal |> resetOutOfBounds
+        model |> flipVelocityHorizontal |> resetOutOfBounds |> nextDVDText
 
     else
         model
@@ -649,7 +660,7 @@ renderHelp model =
                 [ id "close-button"
                 , onClick UserClosedHelp
                 ]
-                [ text "×" ]
+                [ lazy text "×" ]
              ]
                 ++ map (\ds -> div [] [ text ds ]) [ "• WASD to bump", "logo every 3/sec", "• Q/E to adjust speed" ]
             )
@@ -674,7 +685,7 @@ renderDVD model =
         ]
         [ span
             []
-            [ text model.chosen ]
+            [ lazy text (get model.chosen model.choices |> withDefault "DVD") ]
         ]
 
 
