@@ -510,7 +510,7 @@ consumeUserInputEvent model ui_event =
                         magnitude =
                             abs v_model.velocity.x + proposed_change
                     in
-                    magnitude >= 2 && magnitude <= 2 * default_velocity
+                    magnitude >= 2 && magnitude <= 3 * default_velocity
 
                 -- increases/decreases the velocity
                 modifyVelocity : Int -> Model -> Model
