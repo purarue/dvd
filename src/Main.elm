@@ -20,7 +20,7 @@ import Maybe exposing (withDefault)
 -}
 default_velocity : Int
 default_velocity =
-    3
+    5
 
 
 {-| default time to display help modeal for
