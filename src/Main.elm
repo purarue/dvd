@@ -558,7 +558,7 @@ consumeUserInputEvent model ui_event =
             model
 
 
-{-| updates the model when a message is recieved
+{-| updates the model when a message is received
 -}
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
