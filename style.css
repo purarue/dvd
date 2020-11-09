@@ -1,82 +1,81 @@
-
 /* load font */
 @font-face {
-    font-family: "DVDFont";
-    src: url("assets/Montserrat-BoldItalic.ttf");
+  font-family: "DVDFont";
+  src: url("assets/Montserrat-BoldItalic.ttf");
 }
 
 /* zero out margin/padding */
 * {
-    margin: 0;
-    padding: 0;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-    background-color: black;
-    color: white;
-    overflow: hidden;
+  background-color: black;
+  color: white;
+  overflow: hidden;
 }
 
 /* full screen container */
 div#tv-screen {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
 }
 
 div#dvd {
-    position: absolute;
-    background-color: blue;
-    text-align: center;
-    vertical-align: center;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-family: "DVDFont", sans-serif;
-    font-weight: 900;
-    font-size: 3.75vw;
+  position: absolute;
+  background-color: blue;
+  text-align: center;
+  vertical-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: "DVDFont", sans-serif;
+  font-weight: 900;
+  font-size: 3.75vw;
 }
 
 div#debug {
-    position: absolute;
-    word-break: break-all;
-    bottom: 0;
-    left: 0;
+  position: absolute;
+  word-break: break-all;
+  bottom: 0;
+  left: 0;
 }
 
 div#help {
-    display: flex;
-    flex-direction: column;
-    flex-wrap: nowrap;
-    position: absolute;
-    font-size: 0.66rem;
-    align-items: start;
-    top: 0;
-    right: 0;
-    margin: 10px;
-    padding: 5px;
-    padding-top: 0px;
-    border-radius: 2px;
-    background-color: #222;
-    font-size: 1rem;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  position: absolute;
+  font-size: 0.66rem;
+  align-items: start;
+  top: 0;
+  right: 0;
+  margin: 10px;
+  padding: 5px;
+  padding-top: 0px;
+  border-radius: 2px;
+  background-color: #222;
+  font-size: 1rem;
 }
 
 div#help hr {
-    width: 100%;
+  width: 100%;
 }
 
 div#help div#close-button {
-    position: relative;
-    top: 3px;
-    font-size: 1.25rem;
-    font-family: Garamond, "Apple Garamond";
-    align-self: end;
-    cursor: pointer;
+  position: relative;
+  top: 3px;
+  font-size: 1.25rem;
+  font-family: Garamond, "Apple Garamond";
+  align-self: end;
+  cursor: pointer;
 }
 
 div#help div#close-button:hover {
-    color: darkgrey;
-    opacity: 50%;
+  color: darkgrey;
+  opacity: 50%;
 }
