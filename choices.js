@@ -61,5 +61,4 @@ let choices = shuffle([
   "NPC",
   "MLG",
   "PHD",
-  "LGBT",
 ]);
