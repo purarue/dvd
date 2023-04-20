@@ -1,7 +1,7 @@
 module Main exposing (..)
 
 import Array exposing (Array, fromList, get, length)
-import Browser as Browser exposing (element)
+import Browser exposing (element)
 import Browser.Events exposing (Visibility(..))
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (id, style)
