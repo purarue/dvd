@@ -356,7 +356,7 @@ updateVelocity model =
                     }
             }
 
-        -- incase the div clips out of bounds
+        -- in case the div clips out of bounds
         -- due to user input, reset it
         resetOutOfBounds : Model -> Model
         resetOutOfBounds r_model =
