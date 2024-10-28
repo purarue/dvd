@@ -1,6 +1,6 @@
-# XQC-DVD [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
+# DVD
 
-<img src="https://raw.githubusercontent.com/purarue/xqc-dvd/master/.github/demo.gif" width=600>
+<img src="https://raw.githubusercontent.com/purarue/dvd/master/.github/demo.gif" width=600>
 
 A browser dvd logo animation/game.
 
