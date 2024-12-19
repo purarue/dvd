@@ -20,7 +20,6 @@ function shuffle(array) {
 
 let choices = shuffle([
   "DVD",
-  "XQC",
   "HDTV",
   "PVC",
   "HTC",
